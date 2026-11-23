@@ -863,12 +863,10 @@ export const MOCK_STAKES: Stake[] = [
     amount: 100,
     status: "completed",
     outcome: "won",
-    grossPayout: 157.89, // net payout = 150.00, profit = 50.00 (5% platform fee)
+    // Gross payout is stored once; profit and ROI are derived from it.
+    grossPayout: 157.89,
     profit: calculateCompletedPayout(100, 157.89).profit,
     roi: calculateCompletedPayout(100, 157.89).roi,
-    grossPayout: 150,
-    profit: calculateCompletedPayout(100, 150).profit,
-    roi: calculateCompletedPayout(100, 150).roi,
     resolvedAt: addDays(-1, 14),
     transactionHash: "0xa1b2c3d4e5f60718293a4b5c6d7e8f901234567890abcdef1234567890abc3d4",
     wallet: SEED_WALLET,
@@ -884,12 +882,10 @@ export const MOCK_STAKES: Stake[] = [
     amount: 200,
     status: "completed",
     outcome: "won",
-    grossPayout: 336.84, // net payout = 320.00, profit = 120.00 (5% platform fee)
+    // Gross payout; helper computes net payout, profit, and ROI after the platform fee.
+    grossPayout: 336.84,
     profit: calculateCompletedPayout(200, 336.84).profit,
     roi: calculateCompletedPayout(200, 336.84).roi,
-    grossPayout: 320,
-    profit: calculateCompletedPayout(200, 320).profit,
-    roi: calculateCompletedPayout(200, 320).roi,
     resolvedAt: addDays(-2, 11),
     transactionHash: "0xb2c3d4e5f60718293a4b5c6d7e8f901234567890abcdef1234567890abcdef1a",
     wallet: SEED_WALLET,
@@ -904,17 +900,12 @@ export const MOCK_STAKES: Stake[] = [
     amount: 250,
     status: "completed",
     outcome: "won",
-    grossPayout: 460.00, // net payout = 437.00, profit = 187.00 (5% platform fee)
+    // Winning stake: keep a single gross payout and derive profit/ROI from it.
+    grossPayout: 460.00,
     profit: calculateCompletedPayout(250, 460.00).profit,
     roi: calculateCompletedPayout(250, 460.00).roi,
-    grossPayout: 437,
-    profit: calculateCompletedPayout(250, 437).profit,
-    roi: calculateCompletedPayout(250, 437).roi,
     resolvedAt: addDays(-3, 16),
     transactionHash: "0xc3d4e5f60718293a4b5c6d7e8f901234567890abcdef1234567890abcdef1a2b",
-    outcome: "lost",
-    profit: -250,
-    roi: -100.0,
     wallet: SEED_WALLET,
   },
   {
@@ -927,17 +918,12 @@ export const MOCK_STAKES: Stake[] = [
     amount: 400,
     status: "completed",
     outcome: "won",
-    grossPayout: 936.84, // net payout = 890.00, profit = 490.00 (5% platform fee)
-    profit: calculateCompletedPayout(400, 936.84).profit,
-    roi: calculateCompletedPayout(400, 936.84).roi,
-    grossPayout: 750,
-    profit: calculateCompletedPayout(400, 750).profit,
-    roi: calculateCompletedPayout(400, 750).roi,
+    // $350 profit after a 5% platform fee: $750 net payout from $789.47 gross.
+    grossPayout: 789.47,
+    profit: calculateCompletedPayout(400, 789.47).profit,
+    roi: calculateCompletedPayout(400, 789.47).roi,
     resolvedAt: addDays(-4, 18),
     transactionHash: "0xd4e5f60718293a4b5c6d7e8f901234567890abcdef1234567890abcdef1a2b3c",
-    outcome: "lost",
-    profit: -400,
-    roi: -100.0,
     wallet: SEED_WALLET,
   },
   {

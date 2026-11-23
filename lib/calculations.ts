@@ -11,6 +11,20 @@ export interface WinningsCalculation {
 export const PLATFORM_FEE = PLATFORM_FEE_PERCENTAGE;
 const FEE = PLATFORM_FEE_PERCENTAGE;
 
+/**
+ * Safely calculates ROI.
+ *
+ * ROI is undefined mathematically when the stake is zero. For UI calculations,
+ * we return 0 to prevent NaN or Infinity from being rendered.
+ */
+function calculateRoi(profit: number, stakeAmount: number): number {
+	if (stakeAmount <= 0 || !Number.isFinite(stakeAmount)) return 0;
+
+	const roi = (profit / stakeAmount) * 100;
+
+	return Number.isFinite(roi) ? roi : 0;
+}
+
 export function calculateGrossPayout(
 	stakeAmount: number,
 	profit?: number,
@@ -34,10 +48,16 @@ export function calculateCompletedPayout(
 	const fee = grossPayout * PLATFORM_FEE;
 	const net = grossPayout - fee;
 	const profit = Number((net - stakeAmount).toFixed(2));
-	const roi = Number(((profit / stakeAmount) * 100).toFixed(2));
-	return { gross: grossPayout, fee, net, profit, roi };
-}
+	const roi = Number(calculateRoi(profit, stakeAmount).toFixed(2));
 
+	return {
+		gross: grossPayout,
+		fee,
+		net,
+		profit,
+		roi,
+	};
+}
 
 export function calculatePotentialWinnings(
 	stakeAmount: number,
@@ -45,13 +65,37 @@ export function calculatePotentialWinnings(
 	yesPool: number,
 	noPool: number,
 ): WinningsCalculation {
+	// Empty, zero, or invalid stakes should not produce invalid calculations.
+	if (!Number.isFinite(stakeAmount) || stakeAmount <= 0) {
+		return {
+			grossWinnings: 0,
+			platformFee: 0,
+			netWinnings: 0,
+			profit: 0,
+			roi: 0,
+		};
+	}
+
 	const winningSidePool = (side === "yes" ? yesPool : noPool) + stakeAmount;
 	const totalPool = yesPool + noPool + stakeAmount;
+
+	// Prevent division by zero if pool data is invalid.
+	if (winningSidePool <= 0 || !Number.isFinite(winningSidePool)) {
+		return {
+			grossWinnings: 0,
+			platformFee: 0,
+			netWinnings: 0,
+			profit: 0,
+			roi: 0,
+		};
+	}
+
 	const gross = (stakeAmount / winningSidePool) * totalPool;
 	const fee = gross * PLATFORM_FEE_PERCENTAGE;
 	const net = gross - fee;
 	const profit = net - stakeAmount;
-	const roi = (profit / stakeAmount) * 100;
+	const roi = calculateRoi(profit, stakeAmount);
+
 	return {
 		grossWinnings: gross,
 		platformFee: fee,
@@ -63,7 +107,9 @@ export function calculatePotentialWinnings(
 
 export function calculatePoolPercentages(yesPool: number, noPool: number) {
 	const total = yesPool + noPool;
+
 	if (!total) return { yes: 50, no: 50 };
+
 	return {
 		yes: Math.round((yesPool / total) * 100),
 		no: Math.round((noPool / total) * 100),
@@ -152,13 +198,18 @@ export function getLockTimestamp(
 	lockTime: LockTimeKey | string,
 ): number {
 	const k = new Date(kickoff).getTime();
+
 	if (Number.isNaN(k)) return Number.NaN;
+
 	if (lockTime in LOCK_OFFSET_MINUTES) {
 		return k + LOCK_OFFSET_MINUTES[lockTime as LockTimeKey] * 60_000;
 	}
+
 	// Custom lock time stored as ISO string
 	const custom = new Date(lockTime).getTime();
+
 	if (!Number.isNaN(custom)) return custom;
+
 	return Number.NaN;
 }
 
@@ -175,13 +226,16 @@ export function getLockTargetISO(
 	// For known preset keys, derive from kickoff + offset
 	if (lockTime in LOCK_OFFSET_MINUTES) {
 		const t = getLockTimestamp(kickoff, lockTime as LockTimeKey);
+
 		if (Number.isNaN(t)) return kickoff;
+
 		return new Date(t).toISOString();
 	}
 
 	// Unknown value: treat as an already-computed ISO string (custom lock stored
 	// directly on poll.lockTime for backward-compat with older persisted data).
 	const d = new Date(lockTime);
+
 	if (!Number.isNaN(d.getTime())) return lockTime;
 
 	return kickoff;
@@ -200,28 +254,38 @@ export function getLockTargetISO(
  * @param now Injected for testing; defaults to the current time.
  */
 export function isPollLocked(
-	poll: { status?: string; lockTime: LockTimeKey | string; lockTargetISO?: string },
+	poll: {
+		status?: string;
+		lockTime: LockTimeKey | string;
+		lockTargetISO?: string;
+	},
 	match: { kickoff: string } | undefined,
 	now: number = Date.now(),
 ): boolean {
 	if (!match) return false;
+
 	if (poll.status && poll.status !== "active") return true;
 
 	// Prefer an explicit lock timestamp if present
 	if (poll.lockTargetISO) {
 		const t = new Date(poll.lockTargetISO).getTime();
+
 		if (!Number.isNaN(t)) return now >= t;
 	}
 
 	if (!(poll.lockTime in LOCK_OFFSET_MINUTES)) {
 		// Treat as ISO datetime (custom lock stored directly on lockTime)
 		const t = new Date(poll.lockTime).getTime();
+
 		if (!Number.isNaN(t)) return now >= t;
+
 		return false;
 	}
 
 	const lock = getLockTimestamp(match.kickoff, poll.lockTime as LockTimeKey);
+
 	if (Number.isNaN(lock)) return false;
+
 	return now >= lock;
 }
 
@@ -232,9 +296,16 @@ export function msUntilLock(
 	now: number = Date.now(),
 ): number {
 	if (!match) return 0;
-	const lockISO = getLockTargetISO(match.kickoff, poll.lockTime, poll.lockTargetISO);
+
+	const lockISO = getLockTargetISO(
+		match.kickoff,
+		poll.lockTime,
+		poll.lockTargetISO,
+	);
 	const lock = new Date(lockISO).getTime();
+
 	if (Number.isNaN(lock)) return 0;
+
 	return Math.max(0, lock - now);
 }
 
@@ -244,8 +315,8 @@ export function msUntilLock(
  * Hours that community voting stays open after a poll locks.
  *
  * Mirrors `voting_window_seconds` (7200) in the contract. Previously this was
- * hardcoded as `2 * 60 * 60 * 1000` in `voting-card.tsx`, which is why the
- * constant existed but had no consumers.
+ * hardcoded as `2 * 60 * 60 * 1000` in `voting-card.tsx`, which is why
+ * the constant existed but had no consumers.
  */
 export const VOTING_WINDOW_MS = 2 * 60 * 60 * 1000;
 
@@ -261,8 +332,15 @@ export function getVotingDeadline(
 	match: { kickoff: string } | undefined,
 ): number {
 	if (!match) return Number.NaN;
-	const lockISO = getLockTargetISO(match.kickoff, poll.lockTime, poll.lockTargetISO);
+
+	const lockISO = getLockTargetISO(
+		match.kickoff,
+		poll.lockTime,
+		poll.lockTargetISO,
+	);
 	const lock = new Date(lockISO).getTime();
+
 	if (Number.isNaN(lock)) return Number.NaN;
+
 	return lock + VOTING_WINDOW_MS;
 }
